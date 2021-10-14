@@ -19,26 +19,37 @@ import time
 import os
 import re
 
-chrome_default_path = os.getcwd() + '/driver/chromedriver' + ('.exe' if os.sys.platform == 'win32' else '')
+chrome_default_path = os.getcwd() + '/driver/chromedriver' + \
+    ('.exe' if os.sys.platform == 'win32' else '')
 
 HOME_URL = "https://web.whatsapp.com/"
 
 browser = None
 contacts = {}
 
+
 def sanitize_phone(phone):
-    return phone.translate(str.maketrans({' ':'', '+':''}))
+    return phone.translate(str.maketrans({' ': '', '+': ''}))
+
 
 def send_message(number, message_text):
-    js_send = f"""
+    js_populate_messagebox = f"""
     var wsp_msg_url = "https://web.whatsapp.com/send?phone={sanitize_phone(number)}&text={message_text}"
     const msj = document.createElement('a')
     msj.id = 'envio'
     msj.href = wsp_msg_url
     document.body.appendChild(msj)
-    msj.click() # todo: clear input box before write a message
+    msj.click() // TODO: clear input box before write a message
     """
     print(f"[+]Sending message to {number} with the text:{message_text}!")
+    browser.execute_script(js_populate_messagebox)
+
+
+def confirm_send():
+    js_send = """
+    var btn_send = document.querySelector('[data-testid="send"]')
+    btn_send.click()
+    """
     browser.execute_script(js_send)
 
 
@@ -61,14 +72,23 @@ def load_file(attachment=[]):
     autoit.control_set_text("Open", "Edit1", " ".join(files))
     autoit.control_click("Open", "Button1")
 
+
 def test_message():
     send_message(5493463443291, "Este es un mensaje de prueba.")
 
+
 def test_image():
-    load_file(["C:\\Users\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png"])
+    load_file(
+        ["C:\\Users\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png"])
+
 
 def test_images():
-    load_file(["C:\\Users\\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png","C:\\Users\Guille\\Desktop\\whatsapp\\2.jpg"])
+    load_file(["C:\\Users\\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png",
+               "C:\\Users\Guille\\Desktop\\whatsapp\\2.jpg"])
+
+def test_case():
+    send_to_all("Hola * $nombre * , espero que te encuentres bien!", ["C:\\Users\\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png","C:\\Users\Guille\\Desktop\\whatsapp\\2.jpg"])
+
 def whatsapp_login(chrome_path, headless):
     global browser
     print("[+]Initializing driver...")
@@ -84,27 +104,38 @@ def whatsapp_login(chrome_path, headless):
     browser.maximize_window()
     print('[+]Driver initialized...')
 
+
 def send_to_all(message, attachment=None):
     print("Sending...")
     # prepare files
-    # prepare contacts 
-    keyworkds = re.findall('(\$.+?)\s', message) # all $(..) ocurrences
+    # prepare contacts
+    keyworkds = re.findall('(\$.+?)\s', message)  # all $(..) ocurrences
     for contact in contacts.values():
         new_message = message
-        if contact:
-           phone = contact['telefono']
+        try:
+            if contact:
+                phone = contact['telefono']
 
-           # Substitute special keys ocurrences
-           for key in keyworkds:
-                new = contact.get(key[1:])
-                new_message = new_message.replace(key, new if new else '<error>') #replace key $... for contact[key without $]
-           #load_file(attachment)
-           send_message(phone, new_message)
-           time.sleep(5)
+                # Substitute special keys ocurrences
+                for key in keyworkds:
+                    new = contact.get(key[1:])
+                    # replace key $... for contact[key without $]
+                    new_message = new_message.replace(
+                        key, new if new else '<error>')
+                # load_file(attachment)
+                send_message(phone, new_message)
+                time.sleep(1.5)
+                load_file(attachment)
+                time.sleep(2)
+                confirm_send()
+                
+            print("[+]Message sent!")
+        except:
+            print("[-]Error to send message.")
 
 
 def load_contacts():
-    # Load contacts from .csv 
+    # Load contacts from .csv
     print("[+]Loading contacts...")
     with open("telefonos.csv", "r") as file:
         file = file.read().split('\n')
@@ -116,14 +147,15 @@ def load_contacts():
             if len(data)-1 == len(header):
                 contacts[data[0]] = {}
                 for idx, col in enumerate(data[1:]):
-                    contacts[data[0]].update({header[idx]:col})
+                    contacts[data[0]].update({header[idx]: col})
     print("[+]Ready")
+
 
 if __name__ == '__main__':
     whatsapp_login('driver/chromedriver.exe', headless=False)
 
     load_contacts()
-    #send_to_all("Hola $nombre , espero que te encuentres bien!", ["file.png", "file2.png"])
+    #send_to_all("Hola * $nombre * , espero que te encuentres bien!", ["C:\\Users\\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png","C:\\Users\Guille\\Desktop\\whatsapp\\2.jpg"])
 
     while True:
         try:
