@@ -20,7 +20,7 @@ import os
 import re
 
 chrome_default_path = os.getcwd() + '/driver/chromedriver' + \
-    ('.exe' if os.sys.platform == 'win32' else '')
+    ('.exe' if os.sys.platform == 'win32' else '') # xD
 
 HOME_URL = "https://web.whatsapp.com/"
 
@@ -31,15 +31,26 @@ contacts = {}
 def sanitize_phone(phone):
     return phone.translate(str.maketrans({' ': '', '+': ''}))
 
+def open_chat(number):
+    js_open_chat = f"""
+        var wsp_msg_url = "https://web.whatsapp.com/send?phone={sanitize_phone(number)}&text="
+        const msj = document.createElement('a')
+        msj.id = 'envio'
+        msj.href = wsp_msg_url
+        document.body.appendChild(msj)
+        msj.click() // TODO: clear input box before write a message
+    """ 
+    print(f"[+] Opening chat with {number}.")
+    browser.execute_script(js_open_chat)
 
-def send_message(number, message_text):
+def write_message(number, message_text):
     js_populate_messagebox = f"""
-    var wsp_msg_url = "https://web.whatsapp.com/send?phone={sanitize_phone(number)}&text={message_text}"
-    const msj = document.createElement('a')
-    msj.id = 'envio'
-    msj.href = wsp_msg_url
-    document.body.appendChild(msj)
-    msj.click() // TODO: clear input box before write a message
+        var wsp_msg_url = "https://web.whatsapp.com/send?phone={sanitize_phone(number)}&text={message_text}"
+        const msj = document.createElement('a')
+        msj.id = 'envio'
+        msj.href = wsp_msg_url
+        document.body.appendChild(msj)
+        msj.click() // TODO: clear input box before write a message
     """
     print(f"[+]Sending message to {number} with the text:{message_text}!")
     browser.execute_script(js_populate_messagebox)
@@ -47,8 +58,8 @@ def send_message(number, message_text):
 
 def confirm_send():
     js_send = """
-    var btn_send = document.querySelector('[data-testid="send"]')
-    btn_send.click()
+        var btn_send = document.querySelector('[data-testid="send"]')
+        btn_send.click()
     """
     browser.execute_script(js_send)
 
@@ -58,9 +69,9 @@ def load_file(attachment=[]):
     print("Prepared for send ", files)
 
     attach_btn_click = """
-    boton_adjuntar_imagen = document.querySelector('[data-testid="attach-image"]')
-    boton_adjuntar = document.querySelector('[aria-label="Adjuntar"]')
-    boton_adjuntar.click()
+        boton_adjuntar_imagen = document.querySelector('[data-testid="attach-image"]')
+        boton_adjuntar = document.querySelector('[aria-label="Adjuntar"]')
+        boton_adjuntar.click()
     """
     browser.execute_script(attach_btn_click)
     upping = ActionChains(browser)\
@@ -68,26 +79,68 @@ def load_file(attachment=[]):
         .send_keys(Keys.ENTER)\
         .perform()
     time.sleep(1.5)
-    autoit.control_focus("Open", "Edit1")
-    autoit.control_set_text("Open", "Edit1", " ".join(files))
-    autoit.control_click("Open", "Button1")
-
+    try:
+        autoit.control_focus("Open", "Edit1")
+        autoit.control_set_text("Open", "Edit1", " ".join(files))
+        autoit.control_click("Open", "Button1")
+        return False
+    except:
+        return True
 
 def test_message():
-    send_message(5493463443291, "Este es un mensaje de prueba.")
+    write_message(5493463443291, "Este es un mensaje de prueba.")
 
 
 def test_image():
     load_file(
         ["C:\\Users\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png"])
 
+class ModalHandle:
+
+    def getElement():
+        # return modal (confirmation, error, etc) content like str
+        js_modal = """
+            const app = document.getElementById('app');
+            return app.childNodes[0].childNodes[1]
+        """
+        return browser.execute_script(js_modal)
+
+    def getContent():
+        return ModalHandle.getElement().text
+
+    def confirm():
+        # click on button
+        js_modal_click = """
+            const app = document.getElementById('app')
+            const modal = app.childNodes[0].childNodes[1]
+            modal.querySelector("[role='button']").click()
+        """
+        browser.execute_script(js_modal_click)
+        return not ModalHandle.isOpened()
+
+    def isOpened():
+        # return modal (confirmation, loading_statues(?, error, etc) content like str
+        js_modal = """
+            const app = document.getElementById('app');
+            if(app.childNodes[0].childNodes[1].innerHTML != ''){
+                return true
+            }
+            return false
+        """
+        return browser.execute_script(js_modal)
+
+    def invalidPhone():
+        msg_invalid_phone= "teléfono compartido a través de la dirección URL es inválido"
+        if msg_invalid_phone in str(ModalHandle.getContent()):
+            return True
+        return False
 
 def test_images():
     load_file(["C:\\Users\\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png",
                "C:\\Users\Guille\\Desktop\\whatsapp\\2.jpg"])
 
 def test_case():
-    send_to_all("Hola * $nombre * , espero que te encuentres bien!", ["C:\\Users\\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png","C:\\Users\Guille\\Desktop\\whatsapp\\2.jpg"])
+    send_to_all("Hola señor *$apellido* , espero que te encuentres bien, este es un mensaje automático de prueba! Por cierto, conozco tu nombre, es $nombre 😊.", ["C:\\Users\\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png","C:\\Users\Guille\\Desktop\\whatsapp\\2.jpg"])
 
 def whatsapp_login(chrome_path, headless):
     global browser
@@ -106,33 +159,42 @@ def whatsapp_login(chrome_path, headless):
 
 
 def send_to_all(message, attachment=None):
-    print("Sending...")
+    print("[+] Starting send...")
     # prepare files
     # prepare contacts
-    keyworkds = re.findall('(\$.+?)\s', message)  # all $(..) ocurrences
+    keyworkds = re.findall('.(\$\w+)(?:.|$)', message)  # all $\w+ ocurrences
     for contact in contacts.values():
         new_message = message
         try:
             if contact:
                 phone = contact['telefono']
-
+                print("="*30)
+                print("\n[+] Sending message to ", phone)
                 # Substitute special keys ocurrences
                 for key in keyworkds:
+                    key = key.strip()
                     new = contact.get(key[1:])
                     # replace key $... for contact[key without $]
                     new_message = new_message.replace(
                         key, new if new else '<error>')
-                # load_file(attachment)
-                send_message(phone, new_message)
-                time.sleep(1.5)
-                load_file(attachment)
-                time.sleep(2)
-                confirm_send()
-                
+                if browser:
+                    write_message(phone, new_message)
+                    time.sleep(1)
+                    if ModalHandle.invalidPhone(): 
+                        ModalHandle.confirm()
+                        raise Exception("[x] Teléfono invalido! :(")
+                    time.sleep(1.5)
+                    if not ModalHandle.isOpened():
+                        load_files = load_file(attachment)
+                        time.sleep(2)
+                        confirm_send()
+                    else:
+                        raise Exception("Problem to send message after load files")
+
             print("[+]Message sent!")
         except:
-            print("[-]Error to send message.")
-
+            print("Error to send message")
+            print(os.sys.exc_info())
 
 def load_contacts():
     # Load contacts from .csv
@@ -155,7 +217,7 @@ if __name__ == '__main__':
     whatsapp_login('driver/chromedriver.exe', headless=False)
 
     load_contacts()
-    #send_to_all("Hola * $nombre * , espero que te encuentres bien!", ["C:\\Users\\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png","C:\\Users\Guille\\Desktop\\whatsapp\\2.jpg"])
+    #send_to_all("Hola *$nombre* , espero que te encuentres bien!", ["C:\\Users\\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png","C:\\Users\Guille\\Desktop\\whatsapp\\2.jpg"])
 
     while True:
         try:
