@@ -1,0 +1,1 @@
+A script for send wsp-web messages.
