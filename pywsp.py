@@ -20,7 +20,7 @@ import os
 import re
 
 chrome_default_path = os.getcwd() + '/driver/chromedriver' + \
-    ('.exe' if os.sys.platform == 'win32' else '') # xD
+    ('.exe' if os.sys.platform == 'win32' else '')  # xD
 
 HOME_URL = "https://web.whatsapp.com/"
 
@@ -31,6 +31,7 @@ contacts = {}
 def sanitize_phone(phone):
     return phone.translate(str.maketrans({' ': '', '+': ''}))
 
+
 def open_chat(number):
     js_open_chat = f"""
         var wsp_msg_url = "https://web.whatsapp.com/send?phone={sanitize_phone(number)}&text="
@@ -39,9 +40,10 @@ def open_chat(number):
         msj.href = wsp_msg_url
         document.body.appendChild(msj)
         msj.click() // TODO: clear input box before write a message
-    """ 
+    """
     print(f"[+] Opening chat with {number}.")
     browser.execute_script(js_open_chat)
+
 
 def write_message(number, message_text):
     js_populate_messagebox = f"""
@@ -66,10 +68,11 @@ def confirm_send():
 
 def load_file(attachment=[]):
     files = list(map(lambda f: f"\"{f}\"", attachment))
-    print("Prepared for send ", files)
+    print("[+]Prepared for send ", files)
 
     attach_btn_click = """
-        boton_adjuntar_imagen = document.querySelector('[data-testid="attach-image"]')
+        boton_adjuntar_imagen = document.querySelector(
+            '[data-testid="attach-image"]')
         boton_adjuntar = document.querySelector('[aria-label="Adjuntar"]')
         boton_adjuntar.click()
     """
@@ -87,6 +90,7 @@ def load_file(attachment=[]):
     except:
         return True
 
+
 def test_message():
     write_message(5493463443291, "Este es un mensaje de prueba.")
 
@@ -94,6 +98,7 @@ def test_message():
 def test_image():
     load_file(
         ["C:\\Users\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png"])
+
 
 class ModalHandle:
 
@@ -130,27 +135,31 @@ class ModalHandle:
         return browser.execute_script(js_modal)
 
     def invalidPhone():
-        msg_invalid_phone= "teléfono compartido a través de la dirección URL es inválido"
+        msg_invalid_phone = "teléfono compartido a través de la dirección URL es inválido"
         if msg_invalid_phone in str(ModalHandle.getContent()):
             return True
         return False
+
 
 def test_images():
     load_file(["C:\\Users\\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png",
                "C:\\Users\Guille\\Desktop\\whatsapp\\2.jpg"])
 
-def test_case():
-    send_to_all("Hola señor *$apellido* , espero que te encuentres bien, este es un mensaje automático de prueba! Por cierto, conozco tu nombre, es $nombre 😊.", ["C:\\Users\\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png","C:\\Users\Guille\\Desktop\\whatsapp\\2.jpg"])
 
-def whatsapp_login(chrome_path, headless):
+def test_case():
+    send_to_all("Hola señor *$apellido* , espero que te encuentres bien, este es un mensaje automático de prueba! Por cierto, conozco tu nombre, es $nombre 😊.",
+                ["C:\\Users\\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png", "C:\\Users\Guille\\Desktop\\whatsapp\\2.jpg"])
+
+
+def whatsapp_login(headless=False):
     global browser
     print("[+]Initializing driver...")
     chrome_options = Options()
     # chrome_options.add_argument('--user-data-dir=./User_Data')
-    if headless == 'True':
+    if headless == True:
         chrome_options.add_argument('--headless')
     browser = webdriver.Chrome(
-        executable_path=chrome_path, options=chrome_options)
+        executable_path=chrome_default_path, options=chrome_options)
 
     wait = WebDriverWait(browser, 600)
     browser.get(HOME_URL)
@@ -158,43 +167,54 @@ def whatsapp_login(chrome_path, headless):
     print('[+]Driver initialized...')
 
 
+def filter_keywords(message):
+    keywords = re.findall('.(\$\w+)(?:.|$)', message)  # all $\w+ ocurrences
+    return keywords
+
+def send_to(contact, message, attachment):
+    if not contact:
+        return False
+    try:
+        phone = contact['telefono']
+        new_message = message
+        print("="*30)
+        print("\n[+] Sending message to ", phone)
+        # Substitute special keys ocurrences
+        for key in filter_keywords(message):
+            key = key.strip()
+            new = contact.get(key[1:])
+            # replace key $... for contact[key without $]
+            new_message = new_message.replace(
+                key, new if new else '<error>')
+        if browser:
+            write_message(phone, new_message)
+            time.sleep(1)
+            if ModalHandle.invalidPhone():
+                ModalHandle.confirm()
+                raise Exception("[x] Teléfono invalido! :(")
+            time.sleep(1.5)
+            if not ModalHandle.isOpened():
+                if attachment:
+                    load_files = load_file(attachment)
+                    time.sleep(1.5)
+                confirm_send()
+            else:
+                raise Exception("Problem to send message after load files")
+
+        print("[+]Message sent!")
+        return True
+    except:
+        print("[x]Error to send message:")
+        print(os.sys.exc_info())
+        return False
+
 def send_to_all(message, attachment=None):
     print("[+] Starting send...")
     # prepare files
     # prepare contacts
-    keyworkds = re.findall('.(\$\w+)(?:.|$)', message)  # all $\w+ ocurrences
     for contact in contacts.values():
-        new_message = message
-        try:
-            if contact:
-                phone = contact['telefono']
-                print("="*30)
-                print("\n[+] Sending message to ", phone)
-                # Substitute special keys ocurrences
-                for key in keyworkds:
-                    key = key.strip()
-                    new = contact.get(key[1:])
-                    # replace key $... for contact[key without $]
-                    new_message = new_message.replace(
-                        key, new if new else '<error>')
-                if browser:
-                    write_message(phone, new_message)
-                    time.sleep(1)
-                    if ModalHandle.invalidPhone(): 
-                        ModalHandle.confirm()
-                        raise Exception("[x] Teléfono invalido! :(")
-                    time.sleep(1.5)
-                    if not ModalHandle.isOpened():
-                        load_files = load_file(attachment)
-                        time.sleep(2)
-                        confirm_send()
-                    else:
-                        raise Exception("Problem to send message after load files")
-
-            print("[+]Message sent!")
-        except:
-            print("Error to send message")
-            print(os.sys.exc_info())
+        send_to(contact, message, attachment)
+    print("[+] Send_to_all finished...")
 
 def load_contacts():
     # Load contacts from .csv
@@ -207,20 +227,19 @@ def load_contacts():
         header = file_content[0]
         for data in file_content[1:]:
             if len(data)-1 == len(header):
-                contacts[data[0]] = {}
+                cid = int(data[0])
+                contacts[cid] = {}
                 for idx, col in enumerate(data[1:]):
-                    contacts[data[0]].update({header[idx]: col})
+                    contacts[cid].update({header[idx]: col})
     print("[+]Ready")
 
 
 if __name__ == '__main__':
-    whatsapp_login('driver/chromedriver.exe', headless=False)
-
     load_contacts()
-    #send_to_all("Hola *$nombre* , espero que te encuentres bien!", ["C:\\Users\\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png","C:\\Users\Guille\\Desktop\\whatsapp\\2.jpg"])
-
+    whatsapp_login(headless=False)
+   
     while True:
         try:
-            eval(input("debug:"))
+            eval(input("Debug console:"))
         except:
             print(os.sys.exc_info())
