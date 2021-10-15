@@ -214,28 +214,25 @@ def send_to_all(message, attachment=None):
         send_to(contact, message, attachment)
     print("[+] Send_to_all finished...")
 
-def load_contacts():
+def load_contacts(filename):
     # Load contacts from .csv
     print("[+]Loading contacts...")
-    with open("telefonos.csv", "r") as file:
+    with open(filename, "r") as file:
         file = file.read().split('\n')
         delimiter = ','
-
         file_content = list(map(lambda c: c.split(delimiter), file))
         header = file_content[0]
-        for data in file_content[1:]:
-            if len(data)-1 == len(header):
-                cid = int(data[0])
-                contacts[cid] = {}
-                for idx, col in enumerate(data[1:]):
-                    contacts[cid].update({header[idx]: col})
-    print("[+]Ready")
+        for idx, row in enumerate(file_content[1:]):
+            if row and len(row) == len(header):
+                contacts[idx] = {}
+                contacts[idx].update({header:info.strip() for header, info in zip(header, row)})
+
+    print(f"[+]{len(contacts)} contacts loaded.")
 
 
 if __name__ == '__main__':
-    load_contacts()
+    load_contacts("contacts.csv")
     whatsapp_login(headless=False)
-   
     while True:
         try:
             eval(input("Debug console:"))

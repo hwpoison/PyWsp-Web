@@ -1,5 +1,5 @@
 from tkinter import *
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 from tkinter import ttk
 import pywsp
 from threading import Thread
@@ -14,6 +14,7 @@ class Window:
 	def __init__(self, master):
 		self.main = master
 		self.actual_selection = None
+		self.contacts_filename = "contacts.csv"
 		# vars
 		self.amount_files = StringVar()
 		self.amount_files.set('Ninguno')
@@ -25,17 +26,25 @@ class Window:
 
 
 	def init_window(self):
-		self.main.title("Whattasap!")
+		self.main.title("Whattasap! (by:hwpoison)")
 		self.main.geometry("300x550+600+100")
+		self.main.resizable(False, False)
+		self.load_contacts_from()
 		self.populate_contact_list()
+		
 		self.main.mainloop()
 	
 	def init_driver(self):
 		print("[UI]Initializing driver...")
+		messagebox.showinfo(
+			"Atención!", 
+			"A continuación se va a abrir Whatsapp Web, escaneá el código QR antes de efectuar alguna acción!")
 		Thread(target=pywsp.whatsapp_login).start()
 
 	def quit_driver(self):
 		print("[UI]Quitting driver...")
+		if not self.driver_is_opened():
+			return False
 		pywsp.browser.close()
 		pywsp.browser = None
 
@@ -57,9 +66,9 @@ class Window:
 			self.contacts_list_box.insert(END, f"{nombre} {contact['telefono']}")
 
 	def check_driver_thread(self):
-		Thread(target=self.check_driver).start()
+		Thread(target=self.check_driver_loop).start()
 
-	def check_driver(self):
+	def check_driver_loop(self):
 		print("[GUI]Checking driver status...")
 		while True:
 			time.sleep(1)
@@ -67,10 +76,21 @@ class Window:
 				self.init_driver_btn.config(state=DISABLED)
 			else:
 				self.init_driver_btn.config(state=ACTIVE)
-	
+
+	def load_contacts_from(self):
+			pywsp.load_contacts(self.contacts_filename)	
+
+	def driver_is_opened(self):
+		if not pywsp.browser:
+			messagebox.showwarning(
+				"Problema!", 
+				"El navegador no se encuentra abierto o no ha terminado de inicializarse.")
+			return False
+		return True
+
 	def reload_contacts_box(self):
 		print("[UI] Reloading contacts list.")
-		pywsp.load_contacts()
+		self.load_contacts_from()
 		self.populate_contact_list()
 	
 	def on_select_contact(self, event):
@@ -84,10 +104,14 @@ class Window:
 		return self.message_box.get("1.0","end-1c")
 
 	def send_to_selected(self):
+		if not self.driver_is_opened():
+			return False
 		print("[+]Sending message to", self.actual_selection)
 		pywsp.send_to(self.actual_selection, self.get_msg_box_content(), self.actual_attachment)
 
 	def send_to_all(self):
+		if not self.driver_is_opened():
+			return False
 		print("[UI]Starting send to all.")
 		for idx, contact in pywsp.contacts.items():
 			sent = pywsp.send_to(contact, self.get_msg_box_content(), self.actual_attachment)
@@ -119,7 +143,7 @@ class Window:
 			width=50, 
 			command=self.load_attach_files)
 
-		self.added_files_title = Label(text="Archivos adjuntos:")
+		self.added_files_title = Label(text="Archivos adjuntos actuales:")
 		self.added_files = Entry(
 			textvar=self.amount_files, 
 			width=50, 
@@ -130,7 +154,7 @@ class Window:
 		self.message_box = Text(font = ('calibre',12,'normal'), height=8)
 		
 		# contact box handle
-		self.contacts_list_title = Label(text='Contactos:')
+		self.contacts_list_title = Label(text='Contactos disponibles:')
 		self.scrollbar = ttk.Scrollbar(orient=VERTICAL)
 		self.contacts_list_box = Listbox(
 			main, width=50, 
@@ -138,12 +162,12 @@ class Window:
 		
 
 		self.send_to_all = Button(
-			text="✈️ Enviar a todos los contactos", 
+			text="👥 Enviar a todos los contactos", 
 			width=50, 
 			command=self.send_to_all)
 
 		self.send_to_selected_btn = Button(
-			text="👤 Enviar a seleccionado", 
+			text="👤 Enviar solo a seleccionado", 
 			width=50, 
 			command=self.send_to_selected)
 
