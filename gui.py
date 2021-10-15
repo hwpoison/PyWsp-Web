@@ -5,128 +5,171 @@ import pywsp
 from threading import Thread
 import pathlib
 import time
+
 main = Tk()
-main.title("Whattasap!")
-main.geometry("300x550+600+100")
 
-
-init_driver_btn = None
-reload_contacts_btn = None
-contacts_list_box = None
-actual_attach = []
-amount_files = StringVar()
-amount_files.set('Ninguno')
-actual_selected = None
-message_box = None
-
-def check_driver():
-	print("cheking browser status")
-	while True:
-		time.sleep(1)
-		if pywsp.browser:		
-			init_driver_btn.config(state=DISABLED)
-		else:
-			init_driver_btn.config(state=ACTIVE)
-
-def init_driver():
-	print("init_driver()")
-	browser_thread = Thread(target=pywsp.whatsapp_login)
-	browser_thread.start()
-	
-def close_driver():
-	print("closing driver.")
-	pywsp.browser.close()
-	pywsp.browser = None
-
-def add_files():
-	global actual_attach, amount_files
-	print("add_files()")
-	files = filedialog.askopenfiles(title="Seleccionar archivos (Mantener presionado Ctrl mientras se seleccionan)", multiple=True)
-	actual_attach = list(map(lambda f: pathlib.Path(f.name), files))
-	file_names = [file.name for file in actual_attach]
-	amount_files.set(", ".join(file_names))
-	print("attachs:", actual_attach)
-
-def load_contacts_box():
-	pywsp.load_contacts()
-	for contact in pywsp.contacts.values():
-		nombre = f"{contact['nombre']} {contact['apellido']}"
-		if len(nombre) < 20:
-			nombre = nombre + ' '*(30-len(nombre))
-		contacts_list_box.insert(END, f"{nombre} {contact['telefono']}")
-
-def recargar():
-	print("recargar()")
-	pywsp.load_contacts()
-	load_contacts_box()
-
-def onclickList(event):
-  global actual_selected
-  selection = event.widget.curselection()
-  index = selection[0]
-  value = event.widget.get(index)
-  actual_selected = pywsp.contacts[index+1]
-  print("selected:", index,' -> ',value, actual_selected)
-
-def send_to_selected():
-	print("sending to...")
-	message = message_box.get("1.0","end-1c")
-	print(actual_selected)
-	pywsp.send_to(actual_selected, message, actual_attach)
-
-
-# menu
-init_driver_btn = Button(text='🔛 Iniciar WhatsappWeb', width=50, command=init_driver)
-init_driver_btn.pack()
-
-reload_contacts_btn = Button(text="❌ Cerrar Whatsapp", width=50, command=close_driver)
-reload_contacts_btn.pack()
-
-reload_contacts_btn = Button(text="📓 Recargar lista de Contactos", width=50, command=recargar)
-reload_contacts_btn.pack()
-
-files_attach = Button(text="📎 Seleccionar adjuntos", width=50, command=add_files)
-files_attach.pack()
-
-added_files_title = Label(main, text="Archivos adjuntos:").pack()
-
-added_files = Entry(main, textvar=amount_files, width=50, state='readonly').pack()
-# message input
-message_box_title = Label(main, text='Contenido del mensaje:').pack()
 demo_text = "Hola $nombre, espero que esté todo bien! 😂 😂"
-message_box = Text(main, font = ('calibre',12,'normal'), height=8)
-message_box.pack()
 
-# contact box handle
-contacts_list_title = Label(main, text='Contactos:').pack()
+class Window:
+	def __init__(self, master):
+		self.main = master
+		self.actual_selection = None
+		# vars
+		self.amount_files = StringVar()
+		self.amount_files.set('Ninguno')
+		self.actual_attachment = []
 
-scrollbar = ttk.Scrollbar(main, orient=VERTICAL)
-contacts_list_box = Listbox(
-	main, width=50, 
-	yscrollcommand=scrollbar.set,
-	selectforeground="#ffffff",
-    selectbackground="#00aa00"
-)
-#contact click event
-
-
-contacts_list_box.bind('<<ListboxSelect>>', onclickList)
+		self.load_gui()
+		self.init_gui()
+		self.check_driver_thread()
 
 
-scrollbar.config(command=contacts_list_box.yview)
-scrollbar.pack(side=RIGHT, fill=Y)
-contacts_list_box.pack()
+	def init_window(self):
+		self.main.title("Whattasap!")
+		self.main.geometry("300x550+600+100")
+		self.populate_contact_list()
+		self.main.mainloop()
+	
+	def init_driver(self):
+		print("[UI]Initializing driver...")
+		Thread(target=pywsp.whatsapp_login).start()
 
+	def quit_driver(self):
+		print("[UI]Quitting driver...")
+		pywsp.browser.close()
+		pywsp.browser = None
 
-# send buttons
-send_to_all = Button(text="✈️ Enviar a todos los contactos", width=50, command=close_driver)
-send_to_all.pack()
-send_to_selected_btn = Button(text="👤 Enviar a seleccionado", width=50, command=send_to_selected)
-send_to_selected_btn.pack()
+	def load_attach_files(self):
+		title = "Seleccionar archivos (Mantener presionado Ctrl mientras se seleccionan)"
+		print("[UI]Loading attached files.")
+		files = filedialog.askopenfiles(title=title, multiple=True)
+		self.actual_attachment = list(map(lambda f: pathlib.Path(f.name), files))
+		file_names = [file.name for file in self.actual_attachment]
+		self.amount_files.set(", ".join(file_names))
+		print("attachs:", self.actual_attachment)
 
-# 
-browser_check = Thread(target=check_driver)
-browser_check.start()
-load_contacts_box()
+	def populate_contact_list(self):
+		self.contacts_list_box.delete(0, END)
+		for contact in pywsp.contacts.values():
+			nombre = f"{contact['nombre']} {contact['apellido']}"
+			if len(nombre) < 20:
+				nombre = nombre + ' '*(30-len(nombre))
+			self.contacts_list_box.insert(END, f"{nombre} {contact['telefono']}")
 
-main.mainloop()
+	def check_driver_thread(self):
+		Thread(target=self.check_driver).start()
+
+	def check_driver(self):
+		print("[GUI]Checking driver status...")
+		while True:
+			time.sleep(1)
+			if pywsp.browser:		
+				self.init_driver_btn.config(state=DISABLED)
+			else:
+				self.init_driver_btn.config(state=ACTIVE)
+	
+	def reload_contacts_box(self):
+		print("[UI] Reloading contacts list.")
+		pywsp.load_contacts()
+		self.populate_contact_list()
+	
+	def on_select_contact(self, event):
+	  selection = event.widget.curselection()
+	  index = selection[0]
+	  value = event.widget.get(index)
+	  self.actual_selection = pywsp.contacts[index]
+	  print("[UI]Selected:", index,' -> ',value, self.actual_selection)
+
+	def get_msg_box_content(self):
+		return self.message_box.get("1.0","end-1c")
+
+	def send_to_selected(self):
+		print("[+]Sending message to", self.actual_selection)
+		pywsp.send_to(self.actual_selection, self.get_msg_box_content(), self.actual_attachment)
+
+	def send_to_all(self):
+		print("[UI]Starting send to all.")
+		for idx, contact in pywsp.contacts.items():
+			sent = pywsp.send_to(contact, self.get_msg_box_content(), self.actual_attachment)
+			if sent:
+				self.contacts_list_box.itemconfigure(idx, bg="#00aa00", fg="#fff")
+			else:
+				self.contacts_list_box.itemconfigure(idx, bg="#ff0000", fg="#fff")
+		print("[UI]Massive sent Finished.")
+
+	def load_gui(self):
+		# Buttons
+		self.init_driver_btn = Button(
+			text='🔛 Iniciar WhatsappWeb', 
+			width=50, 
+			command=self.init_driver)
+
+		self.quit_driver_btn = Button(
+			text="❌ Cerrar Whatsapp", 
+			width=50, 
+			command=self.quit_driver)
+
+		self.reload_contacts_btn = Button(
+			text="📓 Recargar lista de Contactos", 
+			width=50, 
+			command=self.reload_contacts_box)
+
+		self.files_attach = Button(
+			text="📎 Seleccionar adjuntos", 
+			width=50, 
+			command=self.load_attach_files)
+
+		self.added_files_title = Label(text="Archivos adjuntos:")
+		self.added_files = Entry(
+			textvar=self.amount_files, 
+			width=50, 
+			state='readonly')
+
+		# message input
+		self.message_box_title = Label(self.main, text='Contenido del mensaje:')
+		self.message_box = Text(font = ('calibre',12,'normal'), height=8)
+		
+		# contact box handle
+		self.contacts_list_title = Label(text='Contactos:')
+		self.scrollbar = ttk.Scrollbar(orient=VERTICAL)
+		self.contacts_list_box = Listbox(
+			main, width=50, 
+			yscrollcommand=self.scrollbar.set)
+		
+
+		self.send_to_all = Button(
+			text="✈️ Enviar a todos los contactos", 
+			width=50, 
+			command=self.send_to_all)
+
+		self.send_to_selected_btn = Button(
+			text="👤 Enviar a seleccionado", 
+			width=50, 
+			command=self.send_to_selected)
+
+	def init_gui(self):
+		self.init_driver_btn.pack()
+		self.quit_driver_btn.pack()
+		self.reload_contacts_btn.pack()
+		self.files_attach.pack()
+
+		self.added_files_title.pack()
+		self.added_files.pack()
+
+		self.message_box_title.pack()
+		self.message_box.pack()
+		
+		self.contacts_list_title.pack()
+
+		self.contacts_list_box.bind('<<ListboxSelect>>', self.on_select_contact)
+		
+		self.scrollbar.config(command=self.contacts_list_box.yview)
+		self.scrollbar.pack(side=RIGHT, fill=Y)
+		self.contacts_list_box.pack()
+
+		self.send_to_all.pack()
+		self.send_to_selected_btn.pack()
+
+print("Welcome :)")
+app = Window(main)
+app.init_window()

@@ -172,7 +172,7 @@ def filter_keywords(message):
     return keywords
 
 def send_to(contact, message, attachment):
-    if not contact:
+    if not contact or not browser:
         return False
     try:
         phone = contact['telefono']
@@ -186,21 +186,19 @@ def send_to(contact, message, attachment):
             # replace key $... for contact[key without $]
             new_message = new_message.replace(
                 key, new if new else '<error>')
-        if browser:
-            write_message(phone, new_message)
-            time.sleep(1)
-            if ModalHandle.invalidPhone():
-                ModalHandle.confirm()
-                raise Exception("[x] Teléfono invalido! :(")
-            time.sleep(1.5)
-            if not ModalHandle.isOpened():
-                if attachment:
-                    load_files = load_file(attachment)
-                    time.sleep(1.5)
-                confirm_send()
-            else:
-                raise Exception("Problem to send message after load files")
-
+        write_message(phone, new_message)
+        time.sleep(1)
+        if ModalHandle.invalidPhone():
+            ModalHandle.confirm()
+            raise Exception("[x] Teléfono invalido! :(")
+        if not ModalHandle.isOpened():
+            if attachment:
+                time.sleep(1.5)
+                load_files = load_file(attachment)
+                time.sleep(2)
+            confirm_send()
+        else:
+            raise Exception("Problem to send message after load files")
         print("[+]Message sent!")
         return True
     except:
