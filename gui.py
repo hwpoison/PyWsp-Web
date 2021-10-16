@@ -8,7 +8,7 @@ import time
 
 main = Tk()
 
-demo_text = "Hola $nombre, espero que esté todo bien! 😂 😂"
+DEMO_TEXT = "Hola $nombre, espero que esté todo bien! Este es un mensaje automático de prueba."
 
 class Window:
 	def __init__(self, master):
@@ -181,6 +181,7 @@ class Window:
 		self.added_files.pack()
 
 		self.message_box_title.pack()
+		self.message_box.insert(END, DEMO_TEXT)
 		self.message_box.pack()
 		
 		self.contacts_list_title.pack()

@@ -9,6 +9,8 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.chrome.options import Options
 
+import configparser
+
 # load autoit
 try:
     import autoit
@@ -18,6 +20,16 @@ except ModuleNotFoundError:
 import time
 import os
 import re
+
+filedialog_title = 'Open' # defaut
+
+# read config.ini
+config_load = configparser.ConfigParser()
+config_load.read('config.ini')
+if 'MISC' in config_load.sections():
+    print("[+]reading config.ini")
+    if dialog_title:= config_load['MISC'].get('DIALOGFILE_TITLE'):
+        filedialog_title = dialog_title
 
 chrome_default_path = os.getcwd() + '/driver/chromedriver' + \
     ('.exe' if os.sys.platform == 'win32' else '')  # xD
@@ -83,9 +95,9 @@ def load_file(attachment=[]):
         .perform()
     time.sleep(1.5)
     try:
-        autoit.control_focus("Open", "Edit1")
-        autoit.control_set_text("Open", "Edit1", " ".join(files))
-        autoit.control_click("Open", "Button1")
+        autoit.control_focus(filedialog_title, "Edit1")
+        autoit.control_set_text(filedialog_title, "Edit1", " ".join(files))
+        autoit.control_click(filedialog_title, "Button1")
         return False
     except:
         return True
@@ -232,7 +244,7 @@ def load_contacts(filename):
 
 if __name__ == '__main__':
     load_contacts("contacts.csv")
-    whatsapp_login(headless=False)
+    #whatsapp_login(headless=False)
     while True:
         try:
             eval(input("Debug console:"))
