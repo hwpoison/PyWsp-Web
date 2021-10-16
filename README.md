@@ -1,1 +1,3 @@
-A script for send wsp-web messages.
+A script for send automatic wsp-web messages.
+
+![Screenshot](screenshot.png)
