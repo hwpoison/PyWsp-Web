@@ -21,6 +21,8 @@ import time
 import os
 import re
 
+
+
 filedialog_title = 'Open' # defaut
 
 # read config.ini
@@ -43,39 +45,20 @@ contacts = {}
 def sanitize_phone(phone):
     return phone.translate(str.maketrans({' ': '', '+': ''}))
 
-
-def open_chat(number):
-    js_open_chat = f"""
-        var wsp_msg_url = "https://web.whatsapp.com/send?phone={sanitize_phone(number)}&text="
-        const msj = document.createElement('a')
-        msj.id = 'envio'
-        msj.href = wsp_msg_url
-        document.body.appendChild(msj)
-        msj.click() // TODO: clear input box before write a message
-    """
-    print(f"[+] Opening chat with {number}.")
-    browser.execute_script(js_open_chat)
-
-
 def write_message(number, message_text):
-    js_populate_messagebox = f"""
-        var wsp_msg_url = "https://web.whatsapp.com/send?phone={sanitize_phone(number)}&text={message_text}"
-        const msj = document.createElement('a')
-        msj.id = 'envio'
-        msj.href = wsp_msg_url
-        document.body.appendChild(msj)
-        msj.click() // TODO: clear input box before write a message
-    """
     print(f"[+]Sending message to {number} with the text:{message_text}!")
-    browser.execute_script(js_populate_messagebox)
-
-
-def confirm_send():
-    js_send = """
-        var btn_send = document.querySelector('[data-testid="send"]')
-        btn_send.click()
-    """
-    browser.execute_script(js_send)
+    js = """
+        // Open chat and write something to a phone number
+        const openChat = (phone_number, message='') => {
+            var wsp_msg_url = `https://web.whatsapp.com/send?phone=${ phone_number }&text=${ message }`
+            const open_chat = document.createElement('a')
+            open_chat.id = 'wsp_chat_'
+            open_chat.href = wsp_msg_url
+            document.body.appendChild(open_chat)
+            open_chat.click()
+        };""" f"openChat('{sanitize_phone(number)}', '{message_text}')"
+    print(js)
+    browser.execute_script(js)
 
 
 def load_file(attachment=[]):
@@ -83,8 +66,7 @@ def load_file(attachment=[]):
     print("[+]Prepared for send ", files)
 
     attach_btn_click = """
-        boton_adjuntar_imagen = document.querySelector(
-            '[data-testid="attach-image"]')
+        boton_adjuntar_imagen = document.querySelector('[data-testid="attach-image"]')
         boton_adjuntar = document.querySelector('[aria-label="Adjuntar"]')
         boton_adjuntar.click()
     """
@@ -102,22 +84,47 @@ def load_file(attachment=[]):
     except:
         return True
 
+class ChatBoxHandle:
 
-def test_message():
-    write_message(5493463443291, "Este es un mensaje de prueba.")
+    def confirm_send():
+        js = """
+            var btn_send = document.querySelector('[data-testid="send"]')
+            btn_send.click()
+        """
+        browser.execute_script(js)
 
+    def is_loading_mode():
+        js = """
+            const loading_svg = document.querySelector("[viewBox='0 0 44 44']")
+            return loading_svg?loading_svg.innerHTML!='':false
+        """
+        return browser.execute_script(js)
 
-def test_image():
-    load_file(
-        ["C:\\Users\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png"])
+    def is_media_editor_mode():
+        js = """
+            return document.querySelector("[data-testid='media-editor-sticker']")?true:false;
+        """
+        return browser.execute_script(js)
 
+class NotificationTasteHandle:
+
+    def is_showing():
+        js = """
+            return app.childNodes[0].childNodes[0].textContent != ''
+        """
+        return browser.execute_script(js)
+
+    def get_text():
+        js = """
+            return app.childNodes[0].childNodes[0].textContent
+        """
+        return browser.execute_script(js)
 
 class ModalHandle:
 
     def getElement():
         # return modal (confirmation, error, etc) content like str
         js_modal = """
-            const app = document.getElementById('app');
             return app.childNodes[0].childNodes[1]
         """
         return browser.execute_script(js_modal)
@@ -127,41 +134,37 @@ class ModalHandle:
 
     def confirm():
         # click on button
-        js_modal_click = """
-            const app = document.getElementById('app')
-            const modal = app.childNodes[0].childNodes[1]
-            modal.querySelector("[role='button']").click()
+        js = """
+            // Confirm Modal
+            const confirmModal = () => {
+                const modal = app.childNodes[0].childNodes[1]
+                modal.querySelector("[role='button']").click()
+            }
+            confirmModal()
         """
-        browser.execute_script(js_modal_click)
+        browser.execute_script(js)
         return not ModalHandle.isOpened()
 
     def isOpened():
         # return modal (confirmation, loading_statues(?, error, etc) content like str
-        js_modal = """
-            const app = document.getElementById('app');
-            if(app.childNodes[0].childNodes[1].innerHTML != ''){
-                return true
+        js = """
+            // Verify if a modal is actually opened ( Invalid Phone or any other)
+            const isModalOpened = () => {
+                modal = app.childNodes[0].childNodes[1].innerHTML != ''
+                if(modal){
+                    return true
+                }
+                return false  
             }
-            return false
+            isModalOpened()
         """
-        return browser.execute_script(js_modal)
+        return browser.execute_script(js)
 
     def invalidPhone():
         msg_invalid_phone = "teléfono compartido a través de la dirección URL es inválido"
         if msg_invalid_phone in str(ModalHandle.getContent()):
             return True
         return False
-
-
-def test_images():
-    load_file(["C:\\Users\\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png",
-               "C:\\Users\Guille\\Desktop\\whatsapp\\2.jpg"])
-
-
-def test_case():
-    send_to_all("Hola señor *$apellido* , espero que te encuentres bien, este es un mensaje automático de prueba! Por cierto, conozco tu nombre, es $nombre 😊.",
-                ["C:\\Users\\Guille\\Desktop\\whatsapp\\WebWhatsapp-Wrapper\\webwhatsapi\\js\\imagen.png", "C:\\Users\Guille\\Desktop\\whatsapp\\2.jpg"])
-
 
 def whatsapp_login(headless=False):
     global browser
@@ -198,17 +201,37 @@ def send_to(contact, message, attachment):
             # replace key $... for contact[key without $]
             new_message = new_message.replace(
                 key, new if new else '<error>')
+        # write the message
         write_message(phone, new_message)
+        # wait 1 sec 
         time.sleep(1)
+        # verify if is a invalidPhone
         if ModalHandle.invalidPhone():
+            # confirm modal and cancel send
             ModalHandle.confirm()
             raise Exception("[x] Teléfono invalido! :(")
+
+        # if modal is not open
         if not ModalHandle.isOpened():
+            # procced to attach file
             if attachment:
-                time.sleep(1.5)
-                load_files = load_file(attachment)
-                time.sleep(2)
-            confirm_send()
+                    time.sleep(1.5)
+                    load_files = load_file(attachment)
+                    # wait to finish -auto it- interaction
+                    time.sleep(2)
+
+                    # if after of 5 attempts is even loading, cancel send.
+                    for attempt in range(0, 5):
+                        if not ChatBoxHandle.is_loading_mode():
+                            break
+                        print("[-]Trying to send...", attempt)
+                        time.sleep(5)
+                        if attempt  == 5:
+                            raise Exception('[x] Error to attach file.')
+
+            ChatBoxHandle.confirm_send()
+            time.sleep(1)
+            ChatBoxHandle.confirm_send() # provisory send for files that not support comments. (videos)
         else:
             raise Exception("Problem to send message after load files")
         print("[+]Message sent!")
@@ -244,9 +267,11 @@ def load_contacts(filename):
 
 if __name__ == '__main__':
     load_contacts("contacts.csv")
-    #whatsapp_login(headless=False)
+    whatsapp_login(headless=False)
     while True:
         try:
             eval(input("Debug console:"))
         except:
             print(os.sys.exc_info())
+else:
+    pass
