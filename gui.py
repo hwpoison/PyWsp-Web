@@ -8,7 +8,7 @@ import time
 
 main = Tk()
 
-DEMO_TEXT = "Hola $nombre, espero que esté todo bien! Este es un mensaje automático de prueba."
+DEMO_TEXT = "Hola *$nombre*, espero que esté todo bien! Este es un mensaje automático de prueba. 😁🤖"
 
 class Window:
 	def __init__(self, master):
@@ -119,6 +119,7 @@ class Window:
 				self.contacts_list_box.itemconfigure(idx, bg="#00aa00", fg="#fff")
 			else:
 				self.contacts_list_box.itemconfigure(idx, bg="#ff0000", fg="#fff")
+		messagebox.showinfo("Listo!", "Finalizó el envío masivo.")
 		print("[UI]Massive sent Finished.")
 
 	def load_gui(self):

@@ -57,7 +57,6 @@ def write_message(number, message_text):
             document.body.appendChild(open_chat)
             open_chat.click()
         };""" f"openChat('{sanitize_phone(number)}', '{message_text}')"
-    print(js)
     browser.execute_script(js)
 
 
@@ -77,12 +76,16 @@ def load_file(attachment=[]):
         .perform()
     time.sleep(1.5)
     try:
+        # focus dialog file to write dirs.
         autoit.control_focus(filedialog_title, "Edit1")
         autoit.control_set_text(filedialog_title, "Edit1", " ".join(files))
         autoit.control_click(filedialog_title, "Button1")
-        return False
-    except:
         return True
+    except:
+        # if fails, close filedialog and attach dropdown pressing esc * 2
+        autoit.send("{ESC}")
+        autoit.send("{ESC}")
+        return False
 
 class ChatBoxHandle:
 
@@ -91,7 +94,11 @@ class ChatBoxHandle:
             var btn_send = document.querySelector('[data-testid="send"]')
             btn_send.click()
         """
-        browser.execute_script(js)
+        try:
+            browser.execute_script(js)
+            return True
+        except:
+            return False
 
     def is_loading_mode():
         js = """
@@ -219,6 +226,8 @@ def send_to(contact, message, attachment):
                     load_files = load_file(attachment)
                     # wait to finish -auto it- interaction
                     time.sleep(2)
+                    if not load_files:
+                        raise Exception("Problem to send file attach. Aborting message.")
 
                     # if after of 5 attempts is even loading, cancel send.
                     for attempt in range(0, 5):
