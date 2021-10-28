@@ -8,7 +8,8 @@ import time
 
 main = Tk()
 
-DEMO_TEXT = "Hola *$nombre*, espero que esté todo bien! Este es un mensaje automático de prueba. 😁🤖"
+DEMO_TEXT = "Hola *$nombre*, espero que esté todo bien!\nEste es un _mensaje automático_ de prueba. \
+	😁🤖\nSaludos!\n\nPD:```Recordá que podés darle estilo a tus mensajes.```"
 
 class Window:
 	def __init__(self, master):
@@ -23,12 +24,13 @@ class Window:
 
 		self.load_gui()
 		self.init_gui()
+		pywsp.load_configuration()
 		self.check_driver_thread()
 
 
 	def init_window(self):
 		self.main.title("Whattasap! (by:hwpoison)")
-		self.main.geometry("300x550+600+100")
+		self.main.geometry("350x550+600+100")
 		self.main.resizable(False, False)
 		self.load_contact_box()
 		self.main.mainloop()
@@ -38,14 +40,14 @@ class Window:
 		messagebox.showinfo(
 			"Atención!", 
 			"A continuación se va a abrir Whatsapp Web, escaneá el código QR antes de efectuar alguna acción!")
-		Thread(target=pywsp.whatsapp_login).start()
+		Thread(target=pywsp.browser.open_whatsapp).start()
 
 	def quit_driver(self):
 		print("[UI]Quitting driver...")
 		if not self.driver_is_opened():
 			return False
-		pywsp.browser.close()
-		pywsp.browser = None
+		pywsp.browser.driver.close()
+		pywsp.browser.driver = None
 
 	def load_attach_files(self):
 		title = "Seleccionar archivos (Mantener presionado Ctrl mientras se seleccionan)"
@@ -58,11 +60,11 @@ class Window:
 
 	def populate_contact_list(self):
 		self.contacts_list_box.delete(0, END)
-		for contact in pywsp.contacts.values():
-			name = f"{contact[pywsp.config['NAME_COL_NAME']]} {contact[pywsp.config['LASTNAME_COL_NAME']]}"
+		for contact in pywsp.contacts.contacts.values():
+			name = f"{contact[pywsp.CONFIG['NAME_COL_NAME']]} {contact[pywsp.CONFIG['LASTNAME_COL_NAME']]}"
 			if len(name) < 20:
 				name = name + ' '*(30-len(name))
-			self.contacts_list_box.insert(END, f"{name} {contact[pywsp.config['PHONE_COL_NAME']]}")
+			self.contacts_list_box.insert(END, f"{name} {contact[pywsp.CONFIG['PHONE_COL_NAME']]}")
 
 	def check_driver_thread(self):
 		Thread(target=self.check_driver_loop).start()
@@ -71,20 +73,28 @@ class Window:
 		print("[GUI]Checking driver status...")
 		while True:
 			time.sleep(1)
-			if pywsp.browser:		
+			if pywsp.browser.driver:		
 				self.init_driver_btn.config(state=DISABLED)
 			else:
 				self.init_driver_btn.config(state=ACTIVE)
 
 	def load_contacts_from(self):
-			pywsp.contacts = {}
-			return pywsp.load_contacts(self.contacts_filename)
+			pywsp.contacts.contacts = {}
+			return pywsp.contacts.load(self.contacts_filename)
 
 	def driver_is_opened(self):
-		if not pywsp.browser:
+		if not pywsp.browser.driver:
 			messagebox.showwarning(
 				"Problema!", 
 				"El navegador no se encuentra abierto o no ha terminado de inicializarse.")
+			return False
+		return True
+
+	def is_selected_contact(self):
+		if not self.actual_selection:
+			messagebox.showwarning(
+				"Ops!", 
+				"No ha un contacto seleccionado.")
 			return False
 		return True
 
@@ -97,19 +107,19 @@ class Window:
 			messagebox.showerror('Error', 'Problema al cargar los contactos del .csv, por favor revise la configuración.')
 
 	def on_select_contact(self, event):
-	  selection = event.widget.curselection()
-	  index = selection[0]
-	  value = event.widget.get(index)
-	  self.actual_selection = pywsp.contacts[index]
-	  self.actual_selection_idx = index
-	  print("[UI]Selected:", index,' -> ',value, self.actual_selection)
+		selection = event.widget.curselection()
+		index = selection[0]
+		value = event.widget.get(index)
+		self.actual_selection = pywsp.contacts.contacts[index]
+		self.actual_selection_idx = index
+		print("[UI]Selected:", index,' -> ',value, self.actual_selection)
 
 	def get_msg_box_content(self):
 		return self.message_box.get("1.0","end-1c")
 
 	def format_message(self, contact):
 		try:
-			message = pywsp.format_message(self.get_msg_box_content(), contact)
+			message = pywsp.contacts.format_message(self.get_msg_box_content(), contact)
 			return message
 		except:
 			messagebox.showerror('Oops!', 
@@ -117,13 +127,14 @@ class Window:
 			return False		
 
 	def send_to(self, contact : dict, attachment : list):
+		if not self.driver_is_opened():
+			return False
 		print("[+]Sending message to", contact)
 		message = self.format_message(contact)
 		if not message:
 			return False
 
-		return pywsp.send_to(contact, message, attachment)
-
+		return pywsp.Sender(pywsp.browser).send_to(contact, message, attachment)
 
 	def send_to_selected(self):
 		if not self.driver_is_opened():
@@ -150,7 +161,7 @@ class Window:
 			message = self.format_message(contact)
 			if not message:
 				break
-			sent = pywsp.send_to(contact, message, self.actual_attachment)
+			sent = pywsp.Sender.send_to(contact, message, self.actual_attachment)
 			if sent:
 				self.set_contact_color(idx)
 			else:
@@ -235,5 +246,4 @@ class Window:
 
 print("Holis! :)")
 app = Window(main)
-
 app.init_window()
