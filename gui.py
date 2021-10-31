@@ -5,10 +5,83 @@ import pywsp
 from threading import Thread
 import pathlib
 import time
+import tkinter.font as tkFont
+import tkinter.ttk as ttk
+from functools import reduce
+ 
+class MultiColumnListbox:
+    """use a ttk.TreeView as a multicolumn ListBox"""
+
+    def __init__(self, col_headers, row_data):
+        self.tree = None
+        self.container = None
+        self.col_headers = col_headers
+        self.row_data = row_data
+        self._setup_widgets()
+        self._build_tree()
+
+    def _setup_widgets(self):
+        # set up the treeview
+        self.container = ttk.Frame()
+        # create a treeview with dual scrollbars
+        self.tree = ttk.Treeview(columns=self.col_headers, show="headings")
+        # set treeview font size
+        style = ttk.Style()
+        style.configure("Treeview.Heading", font=("Monospace", 11))
+        # set treeview row font size
+        style.configure("Treeview", font=("Monospace", 11))
+
+        vsb = ttk.Scrollbar(orient="vertical",
+            command=self.tree.yview)
+        hsb = ttk.Scrollbar(orient="horizontal",
+            command=self.tree.xview)
+        self.tree.configure(yscrollcommand=vsb.set,
+            xscrollcommand=hsb.set)
+        self.tree.grid(column=0, row=0, sticky='nsew', in_=self.container)
+        vsb.grid(column=1, row=0, sticky='ns', in_=self.container)
+        hsb.grid(column=0, row=1, sticky='ew', in_=self.container)
+
+        # set the frame resizing priorities
+        self.container.grid_columnconfigure(0, weight=1)
+        self.container.grid_rowconfigure(0, weight=1)
+        
+    def _build_tree(self):
+        for col in self.col_headers:
+            self.tree.heading(col, text=col.title(),
+                command=lambda c=col: self.sortby(self.tree, c, 0))
+            # adjust the column's width to the header string
+            self.tree.column(col,
+                width=tkFont.Font().measure(col.title())+15)
+
+        for ix, item in enumerate(self.row_data):
+            
+            self.tree.insert('', 'end', values=item, tags=str(ix))
+            # adjust column's width if necessary to fit each value
+            for ix, val in enumerate(item):
+                col_w = tkFont.Font().measure(val)
+                if self.tree.column(self.col_headers[ix],width=None)<col_w:
+                    self.tree.column(self.col_headers[ix], width=col_w)
+
+    def sortby(self, tree, col, descending):
+        """ sort tree contents when a column header is clicked on """
+        # grab values to sort
+        data = [(tree.set(child, col), child) \
+            for child in tree.get_children('')]
+        # if the data to be sorted is numeric change to float
+        #data =  change_numeric(data)
+
+        # now sort the data in place
+        data.sort(reverse=descending)
+        for ix, item in enumerate(data):
+            tree.move(item[1], '', ix)
+        # switch the heading so it will sort in the opposite direction
+        tree.heading(col, command=lambda col=col: self.sortby(tree, col, \
+            int(not descending)))
+
 
 main = Tk()
 
-DEMO_TEXT = "Hola *$nombre*, espero que esté todo bien!\nEste es un _mensaje automático_ de prueba. \
+DEMO_TEXT = "Hola *$(nombre)*, espero que esté todo bien!\nEste es un _mensaje automático_ de prueba. \
 	😁🤖\nSaludos!\n\nPD:```Recordá que podés darle estilo a tus mensajes.```"
 
 class Window:
@@ -21,17 +94,20 @@ class Window:
 		self.amount_files = StringVar()
 		self.amount_files.set('Ninguno')
 		self.actual_attachment = []
-
+		
+		pywsp.load_configuration()
 		self.load_gui()
 		self.init_gui()
-		pywsp.load_configuration()
+		
 		self.check_driver_thread()
-
+		
 
 	def init_window(self):
 		self.main.title("Whattasap! (by:hwpoison)")
-		self.main.geometry("350x550+600+100")
+		self.main.geometry("350x650+700+20")
 		self.main.resizable(False, False)
+		# set window icon from .ico
+		self.main.iconbitmap(r'icon.ico')
 		self.load_contact_box()
 		self.main.mainloop()
 	
@@ -59,12 +135,19 @@ class Window:
 		print("attachs:", self.actual_attachment)
 
 	def populate_contact_list(self):
-		self.contacts_list_box.delete(0, END)
-		for contact in pywsp.contacts.contacts.values():
-			name = f"{contact[pywsp.CONFIG['NAME_COL_NAME']]} {contact[pywsp.CONFIG['LASTNAME_COL_NAME']]}"
-			if len(name) < 20:
-				name = name + ' '*(30-len(name))
-			self.contacts_list_box.insert(END, f"{name} {contact[pywsp.CONFIG['PHONE_COL_NAME']]}")
+		# delete all elements of listbox
+		self.listbox.tree.delete(*self.listbox.tree.get_children())
+		def get_by_keys(tuple, keys):
+			lambda_func = lambda key : [item[key] for item in tuple]
+			return [[item[k] for k in keys] for item in tuple]
+	
+		name = pywsp.CONFIG['NAME_COL_NAME']
+		lastname = pywsp.CONFIG['LASTNAME_COL_NAME']
+		phone = pywsp.CONFIG['PHONE_COL_NAME']
+
+		self.listbox.col_headers = [name, lastname, phone]
+		self.listbox.row_data = get_by_keys(list(pywsp.contacts.contacts.values()), [name, lastname, phone])
+		self.listbox._build_tree()
 
 	def check_driver_thread(self):
 		Thread(target=self.check_driver_loop).start()
@@ -103,17 +186,20 @@ class Window:
 		try:
 			self.load_contacts_from()
 			self.populate_contact_list()
+			
 		except:
 			messagebox.showerror('Error', 'Problema al cargar los contactos del .csv, por favor revise la configuración.')
-
+		
 	def on_select_contact(self, event):
-		selection = event.widget.curselection()
-		index = selection[0]
-		value = event.widget.get(index)
-		self.actual_selection = pywsp.contacts.contacts[index]
-		self.actual_selection_idx = index
-		print("[UI]Selected:", index,' -> ',value, self.actual_selection)
-
+		item = self.listbox.tree.identify('item',event.x,event.y)
+		idx = self.listbox.tree.index(item)
+		# get all items from listbox
+		
+		self.actual_selection = pywsp.contacts.contacts[idx]
+		self.actual_selection_idx = idx
+		print("Actual selection:", self.actual_selection)
+		
+		
 	def get_msg_box_content(self):
 		return self.message_box.get("1.0","end-1c")
 
@@ -131,41 +217,40 @@ class Window:
 			return False
 		print("[+]Sending message to", contact)
 		message = self.format_message(contact)
+
+		items = self.listbox.tree.get_children()
+		value = list(self.listbox.tree.item(items[self.actual_selection_idx], "values"))
 		if not message:
 			return False
+		try:
+			pywsp.Sender(pywsp.browser).send_to(contact, message, attachment)
+			value[0] = "☑" + value[0]
+		except:
+			value[0] = "☒" + value[0]
 
-		return pywsp.Sender(pywsp.browser).send_to(contact, message, attachment)
+		self.listbox.tree.item(items[self.actual_selection_idx], value=value, tags=('selected',))
 
 	def send_to_selected(self):
 		if not self.driver_is_opened():
 			return False
 		sent = self.send_to(self.actual_selection, self.actual_attachment)
-		if sent:
-			self.set_contact_color(self.actual_selection_idx)		
-		else:
-			self.set_contact_color(self.actual_selection_idx, color='red')
-
 		return sent
-
-	def set_contact_color(self, index, color='green'):
-		if color == 'green':
-			self.contacts_list_box.itemconfigure(index, bg="#00aa00", fg="#fff")
-		else:
-			self.contacts_list_box.itemconfigure(index, bg="#ff0000", fg="#fff")
 
 	def send_to_all(self):
 		if not self.driver_is_opened():
 			return False
+		ask = messagebox.askyesno("Enviar a todos", "¿Está seguro de enviar el mensaje a todos los contactos?")
+		if not ask:
+			return False
 		print("[UI]Starting send to all.")
-		for idx, contact in pywsp.contacts.items():
-			message = self.format_message(contact)
-			if not message:
-				break
-			sent = pywsp.Sender.send_to(contact, message, self.actual_attachment)
-			if sent:
-				self.set_contact_color(idx)
-			else:
-				self.set_contact_color(idx, color='red')
+		for idx, contact in pywsp.contacts.contacts.items():
+			self.actual_selection_idx = idx
+			self.actual_selection = contact
+			try:
+				sent = self.send_to(contact, self.actual_attachment)
+			except:
+				print("[UI]Error sending message to", contact)
+
 		messagebox.showinfo("Listo!", "Finalizó el envío masivo.")
 		print("[UI]Massive sent Finished.")
 		return True
@@ -204,11 +289,12 @@ class Window:
 		
 		# contact box handle
 		self.contacts_list_title = Label(text='Contactos disponibles:')
-		self.scrollbar = ttk.Scrollbar(orient=VERTICAL)
-		self.contacts_list_box = Listbox(
-			main, width=50, 
-			yscrollcommand=self.scrollbar.set)
-		
+
+		name = pywsp.CONFIG['NAME_COL_NAME']
+		lastname = pywsp.CONFIG['LASTNAME_COL_NAME']
+		phone = pywsp.CONFIG['PHONE_COL_NAME']
+
+		self.listbox = MultiColumnListbox([name, lastname, phone], [])
 
 		self.send_to_all = Button(
 			text="👥 Enviar a todos los contactos", 
@@ -228,19 +314,16 @@ class Window:
 
 		self.added_files_title.pack()
 		self.added_files.pack()
-
+	
 		self.message_box_title.pack()
 		self.message_box.insert(END, DEMO_TEXT)
 		self.message_box.pack()
 		
 		self.contacts_list_title.pack()
-
-		self.contacts_list_box.bind('<<ListboxSelect>>', self.on_select_contact)
 		
-		self.scrollbar.config(command=self.contacts_list_box.yview)
-		self.scrollbar.pack(side=RIGHT, fill=Y)
-		self.contacts_list_box.pack()
-
+		self.listbox.tree.bind("<Button-1>", self.on_select_contact)
+		self.listbox.container.pack(fill=BOTH, expand=True)
+		
 		self.send_to_all.pack()
 		self.send_to_selected_btn.pack()
 

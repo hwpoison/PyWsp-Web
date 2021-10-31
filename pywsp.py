@@ -11,7 +11,7 @@ from selenium.webdriver.chrome.options import Options
 from dataclasses import dataclass
 import autoit
 
-import configparser
+import configparser 
 import time
 import os
 import re
@@ -97,15 +97,16 @@ class Contacts:
     def format_message(self, message : str , keywords : dict):
         # Substitute special keys ocurrences ( $nombre => 'John')
         new_message = message
-        keys = re.findall('.(\$\w+)(?:.|$)', message)  # all $\w+ ocurrences
+        keys = re.findall('.\$\((\w+)\)(?:.|$)', message)  # all $(\w+) ocurrences
+
         for key in keys:
             key = key.strip() # to replace reference: $(value)
-            new = keywords.get(key[1:]) # new value
+            new = keywords.get(key) # new value
             if not new:
                 raise Exception('[+]Problem to get column value.')
             else:
                 new_message = new_message.replace(
-                    key, new)
+                    '$('+key+')', new)
         return new_message
 
     def load(self, filename : str):
@@ -250,7 +251,7 @@ class ModalHandle:
             confirmModal()
         """
         self.browser.driver.execute_script(js)
-        return not ModalHandle.isOpened()
+        return not self.isOpened()
 
     def isOpened(self):
         # return modal (confirmation, loading_statues(?, error, etc) content like str
@@ -297,6 +298,7 @@ class Sender:
             # verify if is a invalidPhone
             if ModalHandle(self.browser).invalidPhone():
                 # confirm modal and cancel send
+                ModalHandle(self.browser).confirm()
                 ModalHandle(self.browser).confirm()
                 raise SendMessageError("Invalid Phone!")
 
@@ -351,15 +353,13 @@ if __name__ == '__main__':
     contacts.load(CURRENT_PATH + "\\contacts.csv")
     
     print(contacts.contacts)
-    print(contacts.sanitize_phone("+54 3463443291"))
-    #browser.open_whatsapp(headless=False)
-    """
+    browser.open_whatsapp(headless=False)
     while True:
             try:
                 eval(input("Debug console:"))
             except:
-                print(os.sys.exc_info())"""
+                print(os.sys.exc_info())
     
 else:
-    contacts = Contacts()
+    contacts = Contacts() 
     browser = Browser()
