@@ -11,7 +11,7 @@ from selenium.webdriver.chrome.options import Options
 from dataclasses import dataclass
 import autoit
 
-import configparser 
+import configparser
 import time
 import os
 import re
@@ -23,9 +23,9 @@ CURRENT_PATH = os.getcwd()
 
 # common names for automatic detection :TODO
 commons_col_names = {
-    'name':['nombre','name', 'firstname'],
-    'lastname':['lastname', 'apellido'],
-    'phone':['phone', 'cellphone', 'teléfono', 'tel', 'whatsapp']
+    'name': ['nombre','name', 'firstname'],
+    'lastname': ['lastname', 'apellido'],
+    'phone': ['phone', 'cellphone', 'teléfono', 'tel', 'whatsapp']
 }
 
 CONFIG = {
@@ -33,8 +33,9 @@ CONFIG = {
    'FILEDIALOG_TITLE': 'Open',
    'NAME_COL_NAME': 'name',
    'LASTNAME_COL_NAME': 'lastname',
-   'PHONE_COL_NAME': 'phone' 
+   'PHONE_COL_NAME': 'phone'
 }
+
 
 def load_configuration():
     # read config.ini
@@ -43,18 +44,19 @@ def load_configuration():
     if 'MISC' in config_load.sections():
         print("[+]reading config.ini")
         misc = config_load['MISC']
-        if dialog_title:= misc.get('DIALOGFILE_TITLE'):
+        if dialog_title := misc.get('DIALOGFILE_TITLE'):
             CONFIG['FILEDIALOG_TITLE'] = dialog_title
         # default col names
-        if phone:= misc.get('PHONE_COL'):
+        if phone := misc.get('PHONE_COL'):
             CONFIG['PHONE_COL_NAME'] = phone
-        if lastname:= misc.get('LASTNAME_COL'):
+        if lastname := misc.get('LASTNAME_COL'):
             CONFIG['LASTNAME_COL_NAME'] = lastname
-        if name:= misc.get('NAME_COL'):
+        if name := misc.get('NAME_COL'):
             CONFIG['NAME_COL_NAME'] = name
         return True
     else:
         return False
+
 
 class Browser:
     """ handles the browser functions """
@@ -67,7 +69,7 @@ class Browser:
         print("[+]Initializing driver...")
         chrome_options = Options()
         # chrome_options.add_argument('--user-data-dir=./User_Data')
-        if headless == True:
+        if headless:
             chrome_options.add_argument('--headless')
         self.driver = webdriver.Chrome(
             executable_path=self.chromedriver_path(), options=chrome_options)
@@ -80,28 +82,28 @@ class Browser:
 
     def chromedriver_path(self):
         chrome_default_path = CURRENT_PATH + '/driver/chromedriver' + \
-            ('.exe' if os.sys.platform == 'win32' else '') 
+            ('.exe' if os.sys.platform == 'win32' else '')
         if os.path.exists(chrome_default_path):
             return chrome_default_path
-        
         raise ChromedriverNotFoundError()
+
 
 class Contacts:
     """ contact handle functions """
     def __init__(self) -> None:
         self.contacts = {}
 
-    def sanitize_phone(self, phone : str): # remove all non-numeric characters
+    def sanitize_phone(self, phone: str):  # remove all non-numeric characters
         return phone.translate(str.maketrans({' ': '', '+': ''}))
 
-    def format_message(self, message : str , keywords : dict):
+    def format_message(self, message: str, keywords: dict):
         # Substitute special keys ocurrences ( $nombre => 'John')
         new_message = message
         keys = re.findall('.\$\((\w+)\)(?:.|$)', message)  # all $(\w+) ocurrences
 
         for key in keys:
-            key = key.strip() # to replace reference: $(value)
-            new = keywords.get(key) # new value
+            key = key.strip()  # to replace reference: $(value)
+            new = keywords.get(key)  # new value
             if not new:
                 raise Exception('[+]Problem to get column value.')
             else:
@@ -109,7 +111,7 @@ class Contacts:
                     '$('+key+')', new)
         return new_message
 
-    def load(self, filename : str):
+    def load(self, filename: str):
         # Load contacts from .csv and apply normalization
         print("[+]Loading contacts...")
         with open(filename, "r") as file:
@@ -120,9 +122,9 @@ class Contacts:
             for idx, row in enumerate(file_content[1:]):
                 if row and len(row) == len(columns):
                     self.contacts[idx] = {}
-                    self.contacts[idx].update({columns:info.strip() for columns, info in zip(columns, row)})
+                    self.contacts[idx].update({columns: info.strip() for columns, info in zip(columns, row)})
                     # normalize phone number
-                    if phone:=self.contacts[idx].get(CONFIG['PHONE_COL_NAME']):
+                    if phone := self.contacts[idx].get(CONFIG['PHONE_COL_NAME']):
                         phone = self.sanitize_phone(phone)
                         self.contacts[idx][CONFIG['PHONE_COL_NAME']] = self.sanitize_phone(phone)
 
@@ -132,10 +134,11 @@ class Contacts:
     def __dict__(self) -> dict:
         return self.contacts
 
+
 @dataclass
 class ChatBoxHandle:
     """ Functions to handle whatsapp web chat box """
-    browser : Browser
+    browser: Browser
 
     def confirm_send(self):
         js = """
@@ -192,7 +195,8 @@ class ChatBoxHandle:
             return False
 
     def write_message(self, number, message_text):
-        message_text = message_text.replace('\n', '%0a') # replace new line with %0
+        # replace new line with %0
+        message_text = message_text.replace('\n', '%0a')
 
         print(f"[+]Sending message to {number} with the text:{message_text}!")
         js = """
@@ -208,10 +212,11 @@ class ChatBoxHandle:
 
         self.browser.driver.execute_script(js)
 
+
 @dataclass
 class NotificationTasteHandle:
     """ Functions to handle taste notifications """
-    browser : Browser
+    browser: Browser
 
     def is_showing(self):
         js = """
@@ -225,10 +230,11 @@ class NotificationTasteHandle:
         """
         return self.browser.driver.execute_script(js)
 
+
 @dataclass
 class ModalHandle:
     """ Functions to handle modal """
-    browser : Browser
+    browser: Browser
 
     def getElement(self):
         # return modal (confirmation, error, etc) content like str
@@ -254,15 +260,14 @@ class ModalHandle:
         return not self.isOpened()
 
     def isOpened(self):
-        # return modal (confirmation, loading_statues(?, error, etc) content like str
         js = """
-            // Verify if a modal is actually opened ( Invalid Phone or any other)
+            // Verify if a modal is actually opened (Invalid Phone or any other)
             const isModalOpened = () => {
                 modal = app.childNodes[0].childNodes[1].innerHTML != ''
                 if(modal){
                     return true
                 }
-                return false  
+                return false
             }
             isModalOpened()
         """
@@ -273,12 +278,13 @@ class ModalHandle:
         if msg_invalid_phone in str(self.getContent()):
             return True
         return False
-        
+
+
 @dataclass
 class Sender:
-    browser : Browser 
+    browser: Browser
 
-    def send_to(self, contact : dict, message : str, attachment : list):
+    def send_to(self, contact: dict, message: str, attachment: list):
         """ Send message to a contact """
 
         if not contact or not self.browser:
@@ -289,11 +295,8 @@ class Sender:
             print("="*30)
             print("\n[+] Sending message to ", phone)
 
-            #new_message = format_message(new_message)
-
-            # write the message
             ChatBoxHandle(self.browser).write_message(phone, new_message)
-            # wait 1 sec 
+            # wait 1 sec
             time.sleep(1)
             # verify if is a invalidPhone
             if ModalHandle(self.browser).invalidPhone():
@@ -306,25 +309,26 @@ class Sender:
             if not ModalHandle(self.browser).isOpened():
                 # procced to attach file
                 if attachment:
-                        time.sleep(1.5)
-                        load_files = ChatBoxHandle(self.browser).attach_file(attachment)
-                        # wait to finish -auto it- interaction
-                        time.sleep(2)
-                        if not load_files:
-                            raise SendMessageError("Problem to send file attach. Aborting message.")
+                    time.sleep(1.5)
+                    load_files = ChatBoxHandle(self.browser).attach_file(attachment)
+                    # wait to finish -auto it- interaction
+                    time.sleep(2)
+                    if not load_files:
+                        raise SendMessageError("Problem to send file attach. Aborting message.")
 
-                        # if after of 5 attempts is even loading, cancel send.
-                        for attempt in range(0, 5):
-                            if not ChatBoxHandle(self.browser).is_loading_mode():
-                                break
-                            print("[-] Trying to send...", attempt)
-                            time.sleep(5)
-                            if attempt  == 5:
-                                raise SendMessageError('Error to attach file.')
+                    # if after of 5 attempts is even loading, cancel send.
+                    for attempt in range(0, 5):
+                        if not ChatBoxHandle(self.browser).is_loading_mode():
+                            break
+                        print("[-] Trying to send...", attempt)
+                        time.sleep(5)
+                        if attempt == 5:
+                            raise SendMessageError('Error to attach file.')
 
                 ChatBoxHandle(self.browser).confirm_send()
                 time.sleep(1)
-                ChatBoxHandle(self.browser).confirm_send() # provisory send for files that not support comments. (videos)
+                # provisory send for files that not support comments. (videos)
+                ChatBoxHandle(self.browser).confirm_send()
             else:
                 raise SendMessageError("Problem to send message after load files")
             print("[+]Message sent!")
@@ -351,15 +355,14 @@ if __name__ == '__main__':
     load_configuration()
 
     contacts.load(CURRENT_PATH + "\\contacts.csv")
-    
+
     print(contacts.contacts)
     browser.open_whatsapp(headless=False)
     while True:
-            try:
-                eval(input("Debug console:"))
-            except:
-                print(os.sys.exc_info())
-    
+        try:
+            eval(input("Debug console:"))
+        except:
+            print(os.sys.exc_info())
 else:
-    contacts = Contacts() 
+    contacts = Contacts()
     browser = Browser()
